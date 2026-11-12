@@ -1,5 +1,6 @@
-(() => {
-  const blockedBotNames = [
+if (typeof module === "object" && module.exports) {
+  const honeypotName = "website_check";
+  const blockedUserAgentFragments = [
     "bot",
     "crawler",
     "spider",
@@ -9,6 +10,42 @@
     "selenium",
     "playwright",
     "puppeteer",
+    "curl/",
+    "wget/",
+    "python-requests",
+    "go-http-client",
+    "java/",
+  ];
+
+  function botBlocker(req, res, next) {
+    if (req.method !== "POST") {
+      next();
+      return;
+    }
+
+    const userAgent = (req.headers["user-agent"] || "").toLowerCase();
+    const matchedBotName = blockedUserAgentFragments.some((name) =>
+      userAgent.includes(name),
+    );
+    const honeypot = req.body && req.body[honeypotName];
+    const filledHoneypot =
+      (Array.isArray(honeypot) ? honeypot : [honeypot]).some(
+        (value) => typeof value === "string" && value.trim() !== "",
+      );
+
+    if (filledHoneypot || matchedBotName) {
+      res.status(403).type("text/plain").send("Access denied.");
+      return;
+    }
+
+    next();
+  }
+
+  module.exports = { botBlocker };
+} else {
+(() => {
+  const blockedBotNames = [
+    // Add User-Agent fragments to block, for example: "ExampleBot"
   ];
   const minimumFormAgeMs = 1200;
   const duplicateSubmitWindowMs = 2000;
@@ -56,25 +93,6 @@
     document.documentElement.style.visibility = "visible";
     document.body.style.visibility = "visible";
     document.body.style.overflow = "hidden";
-  }
-
-  const userAgent = navigator.userAgent.toLowerCase();
-  const matchedBotName = blockedUserAgentFragments.some((name) =>
-    userAgent.includes(name),
-  );
-
-  if (matchedBotName || navigator.webdriver === true) {
-    document.documentElement.style.visibility = "hidden";
-    const showBotMessage = () =>
-      blockDom("This site is available to human visitors only.");
-
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", showBotMessage, {
-        once: true,
-      });
-    } else {
-      showBotMessage();
-    }
   }
 
   function addHoneypot(form) {
@@ -143,6 +161,10 @@
     const honeypot = form.elements.namedItem(honeypotName);
     const filledHoneypot =
       honeypot instanceof HTMLInputElement && honeypot.value.trim() !== "";
+    const userAgent = navigator.userAgent.toLowerCase();
+    const matchedBotName = blockedUserAgentFragments.some((name) =>
+      userAgent.includes(name),
+    );
     const now = Date.now();
     const submittedTooSoon =
       now - (formOpenedAt.get(form) || now) < minimumFormAgeMs;
@@ -180,3 +202,4 @@
     prepareForms();
   }
 })();
+}
